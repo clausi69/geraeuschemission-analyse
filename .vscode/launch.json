@@ -1,0 +1,26 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Analyse: ZIP/Ordner -> Report",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "noise_analysis",
+            "cwd": "${workspaceFolder}",
+            "env": {"PYTHONPATH": "${workspaceFolder}/src"},
+            "args": ["data/TestDevices_PNGs.zip", "-o", "output/Analyse_Geraeuschemission.xlsx"],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Analyse mit Einstellungen aus bestehendem Report",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "noise_analysis",
+            "cwd": "${workspaceFolder}",
+            "env": {"PYTHONPATH": "${workspaceFolder}/src"},
+            "args": ["data/TestDevices_PNGs.zip", "-o", "output/Analyse_Geraeuschemission.xlsx",
+                     "--settings", "output/Analyse_Geraeuschemission.xlsx"],
+            "console": "integratedTerminal"
+        }
+    ]
+}
