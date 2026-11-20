@@ -21,6 +21,7 @@ SETTINGS_SPEC = [
     ("Auswertung", "line_threshold_db", 3.0, "dB", "Linie, wenn Pegel > Ruhegeräusch + Schwelle"),
     ("Auswertung", "peak_prominence_db", 2.0, "dB", "Linie muss so weit über der lokalen Rauschhüllkurve liegen"),
     ("Auswertung", "peak_window_px", 31, "px", "Fensterbreite der lokalen Rauschhüllkurve (Pixelspalten)"),
+    ("Auswertung", "change_min_db", 1.0, "dB", "Änderungs-Chart: Markierung, wenn |Δ| ≥ Wert und Pegel > Ruhegeräusch + Linienschwelle (wirkt sofort)"),
     ("Auswertung", "pair_tol_oct", 0.03, "Okt", "Max. Frequenzabstand zum Paaren von Linien zweier Messungen"),
     ("Auswertung", "floor_poly_degree", 3, "", "Polynomgrad des Ruhegeräusch-Fits (über lg f)"),
     ("Auswertung", "floor_n_files", 10, "", "Anzahl Referenzdateien für das Ruhegeräusch"),

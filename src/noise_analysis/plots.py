@@ -34,11 +34,10 @@ def change_plot(dev, floor_coef, axis, s, out: Path):
     fm, lo, hi = axis
     m0, m1 = dev.measurements[0], dev.measurements[min(1, len(dev.measurements) - 1)]
     fl = _poly_eval(floor_coef, fm)
-    lim = fl + s["limit_offset_db"]
     w_cm, h_cm = s["chart_width_cm"], s["chart_height_cm"]
     fig, ax = plt.subplots(figsize=(w_cm / 2.54, h_cm / 2.54), dpi=200)
     ax.plot(fm, fl, color=_hex(s["color_floor"]), lw=1.0, label="Ruhegeräusch")
-    ax.plot(fm, lim, color=_hex(s["color_limit"]), lw=1.0, ls="--", label="Limit")
+    # no limit line here: this picture is static, the limit lives in the Excel chart (formula driven)
     # fine (pixel-column) traces for realism
     for m, col in ((m0, s["color_meas_0"]), (m1, s["color_meas_1"])):
         t = m.trace
@@ -80,7 +79,6 @@ def floor_plot(floor, axis, s, out: Path):
         ax.plot(t.f[sel], t.med[sel], color="#999999", lw=0.3, alpha=0.6)
     fl = _poly_eval(floor.coef, fm)
     ax.plot(fm, fl, color=_hex(s["color_floor"]), lw=1.5, label="Ruhegeräusch (Fit)")
-    ax.plot(fm, fl + s["limit_offset_db"], color=_hex(s["color_limit"]), lw=1.2, ls="--", label="Limit")
     _fmt_axes(ax, s)
     ax.set_title(f"Ruhegeräusch: robuster Polynom-Fit (Grad {len(floor.coef)-1}) über "
                  f"{len(floor.ref)} Referenzmessungen (grau)", fontsize=8)

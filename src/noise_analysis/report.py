@@ -115,6 +115,19 @@ def _add_line(ch, ws, xcol, ycol, r0, r1, color, width_pt=1.25, dash=None, title
     return se
 
 
+def _add_markers(ch, ws, xcol, ycol, r0, r1, color, symbol):
+    x = Reference(ws, min_col=xcol, min_row=r0 + 1, max_row=r1)
+    y = Reference(ws, min_col=ycol, min_row=r0, max_row=r1)
+    se = Series(y, x, title_from_data=True)
+    se.marker.symbol = symbol
+    se.marker.size = 6
+    se.marker.graphicalProperties.solidFill = color
+    se.marker.graphicalProperties.line.solidFill = color
+    se.graphicalProperties.line.noFill = True
+    ch.series.append(se)
+    return se
+
+
 class ReportBuilder:
     def __init__(self, devices, floor, axis, s, input_name=""):
         self.devs, self.floor, self.axis, self.s = devices, floor, axis, s
@@ -238,10 +251,11 @@ class ReportBuilder:
         # data table position: after graphics pages
         h_rows = _rows_for(s["chart_height_cm"])
         r_chart = 6 + nm + 2
-        r_change = r_chart + h_rows + 1
+        r_change = r_chart + h_rows + 1          # native change chart (formula driven)
         r_peaks = r_change + h_rows + 1
         n_pairs = len(match_peaks(ms[0].peaks, ms[1].peaks, s['pair_tol_oct'])) if nm > 1 else len(ms[0].peaks)
-        r_png = r_peaks + n_pairs + 4
+        r_arrow = r_peaks + n_pairs + 5           # static line-change picture
+        r_png = r_arrow + (h_rows + 1 if nm > 1 else 0)
         T0 = r_png + nm * (h_rows + 1) + 2
         R0, R1 = T0 + 1, T0 + self.nb
         meas_cols = list(range(4, 4 + nm))
@@ -298,11 +312,20 @@ class ReportBuilder:
                 _cell(ws, r, 4 + k, float(np.round(m.bands[i], 2)), "0.00")
             _cell(ws, r, cd, f"={CL(5)}{r}-{CL(4)}{r}" if nm > 1 else 0, "+0.00;-0.00;0.00")
             _cell(ws, r, cd + 1, f"=IF(MAX({mc0}{r}:{mcl}{r})>=B{r},1,0)", "0")
+            if nm > 1:   # marker series for the change chart; off-scale value = not shown
+                thr, chg, ymin = (self.set_addr[k] for k in ("line_threshold_db", "change_min_db", "y_min"))
+                cond = f"MAX(D{r},E{r})>=C{r}+{thr}"
+                _cell(ws, r, cd + 2, f"=IF(AND(E{r}-D{r}>={chg},{cond}),E{r},{ymin}-100)", '[<-99]"–";0.00')
+                _cell(ws, r, cd + 3, f"=IF(AND(D{r}-E{r}>={chg},{cond}),E{r},{ymin}-100)", '[<-99]"–";0.00')
+        if nm > 1:
+            for j, t in ((cd + 2, "Anstieg ≥ Schwelle"), (cd + 3, "Abnahme ≥ Schwelle")):
+                c = ws.cell(T0, j, t); c.font = F_B; c.fill = HDR_FILL; c.border = BOX
+                c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         rng = f"A{R0}:{CL(cd + 1)}{R1}"
         ws.conditional_formatting.add(rng, FormulaRule(
             formula=[f"MAX(${mc0}{R0}:${mcl}{R0})>=$B{R0}"],
             fill=PatternFill("solid", fgColor=s["color_mark"], bgColor=s["color_mark"])))
-        for k in range(4, cd + 2):
+        for k in range(4, cd + 4):
             ws.column_dimensions[CL(k)].width = 10.5
 
         # ---- chart (like the ARTA plot)
@@ -314,10 +337,21 @@ class ReportBuilder:
         _add_line(ch, ws, 1, 2, T0, R1, s["color_limit"], 1.5, dash="dash")
         ws.add_chart(ch, f"A{r_chart}")
 
-        # ---- change plot
+        # ---- change chart (native Excel chart: limit and markers follow 'Einstellungen')
         if nm > 1:
+            ch2 = ScatterChart()
+            _style_chart(ch2, s, f"#{d.nr:02d} – Änderung {ms[0].label} → {ms[1].label}")
+            _add_line(ch2, ws, 1, 4, T0, R1, s["color_meas_0"], 0.75)
+            _add_line(ch2, ws, 1, 5, T0, R1, s["color_meas_1"], 0.75)
+            _add_line(ch2, ws, 1, 3, T0, R1, s["color_floor"], 1.5)
+            _add_line(ch2, ws, 1, 2, T0, R1, s["color_limit"], 1.5, dash="dash")
+            _add_markers(ch2, ws, 1, cd + 2, T0, R1, s["color_up"], "triangle")
+            _add_markers(ch2, ws, 1, cd + 3, T0, R1, s["color_down"], "diamond")
+            ws.add_chart(ch2, f"A{r_change}")
             p = plots.change_plot(d, self.floor.coef, self.axis, s, self.tmp / f"chg_{d.tab}.png")
-            self._img(ws, p, f"A{r_change}")
+            ws.cell(r_arrow - 1, 1, "Linienänderung (Linien gepaart, Pfeile mit ΔL; statisches Bild, "
+                                    "ohne Limit)").font = F_H2
+            self._img(ws, p, f"A{r_arrow}")
         else:
             ws.cell(r_change, 1, "Nur eine Messung vorhanden – keine Änderungsdarstellung.")
 
@@ -358,12 +392,12 @@ class ReportBuilder:
 
         # ---- print layout
         ws.row_breaks.append(Break(id=r_change - 1))
-        ws.row_breaks.append(Break(id=r_png - 2))
-        for k in range(2, nm, 2):
-            ws.row_breaks.append(Break(id=r_png + k * (h_rows + 1) - 1))
+        imgs = ([r_arrow] if nm > 1 else []) + [r_png + k * (h_rows + 1) for k in range(nm)]
+        for k in range(0, len(imgs), 2):          # two pictures per page
+            ws.row_breaks.append(Break(id=imgs[k] - 2))
         ws.row_breaks.append(Break(id=T0 - 2))
         ws.print_title_rows = f"{T0}:{T0}"
-        ws.print_area = f"A1:{CL(max(cd + 1, 12))}{R1}"
+        ws.print_area = f"A1:{CL(max(cd + (3 if nm > 1 else 1), 12))}{R1}"
         _page_setup(ws, s, f"#{d.nr:02d} {d.name}")
         self.dev_info[d.nr] = dict(T0=T0, R0=R0, R1=R1, nm=nm, cd=cd)
 
