@@ -31,7 +31,7 @@ def prepare_input(inp: Path) -> tuple[Path, dict]:
         with zipfile.ZipFile(inp) as z:
             for zi in z.infolist():
                 name = Path(zi.filename).name
-                if not name.lower().endswith(".png") or name.startswith("."):
+                if not name.lower().endswith((".png", ".csv")) or name.startswith("."):
                     continue
                 (out / name).write_bytes(z.read(zi))
                 mt[name] = datetime(*zi.date_time)
@@ -47,9 +47,14 @@ def _plot_hash(tr):
     return h.hexdigest()
 
 
-def run(inp: Path, s: dict, log=print):
-    folder, mtimes = prepare_input(inp)
-    devices = an.scan_folder(folder, mtimes)
+def run(inputs, s: dict, log=print):
+    """inputs: one or more ZIP files/folders; later inputs replace measurements of earlier ones."""
+    if isinstance(inputs, (str, Path)):
+        inputs = [inputs]
+    devices = []
+    for inp in inputs:
+        folder, mtimes = prepare_input(Path(inp))
+        devices = an.merge_devices(devices, an.scan_folder(folder, mtimes))
     fm, lo, hi = an.band_axis(s["f_min"], s["f_max"], int(s["bands_per_octave"]))
 
     # 1) digitize
@@ -57,7 +62,11 @@ def run(inp: Path, s: dict, log=print):
     for d in devices:
         for m in d.measurements:
             m.trace = digitize(m.path, s["plot_f_lo"], s["plot_f_hi"], s["plot_db_top"], s["plot_db_bottom"])
-            h = _plot_hash(m.trace)
+            m.png_trace = m.trace
+            if m.csv_path is not None:          # exact data replaces the digitized curve
+                m.csv = an.read_arta_csv(m.csv_path)
+                m.trace = an.trace_from_csv(*m.csv, m.png_trace)
+            h = _plot_hash(m.png_trace)
             if h in seen:
                 m.duplicate_of = seen[h]
             else:
@@ -88,7 +97,7 @@ def run(inp: Path, s: dict, log=print):
         for m in d.measurements:
             m.peaks = an.detect_peaks(m.trace, coef, s)
             m.bands = an.band_values(m.trace, m.peaks, lo, hi)
-            m.metrics = an.metrics(m.trace, m.peaks, s)
+            m.metrics = an.metrics(m.trace, m.peaks, s, m.csv)
     return devices, floor, (fm, lo, hi)
 
 

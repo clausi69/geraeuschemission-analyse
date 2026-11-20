@@ -29,6 +29,9 @@ nur die Cursor-Stützung und der Abgleich gegen ARTA-RMS entfallen).
 # Messungen als ZIP (bevorzugt: Dateidatum bleibt erhalten) oder als Ordner
 python -m noise_analysis data/TestDevices_PNGs.zip -o output/Analyse_Geraeuschemission.xlsx
 
+# Nachmessungen: weitere ZIPs/Ordner anhängen – sie ersetzen Messungen gleicher Gerätenummer/Minute
+python -m noise_analysis data/TestDevices_PNGs.zip data/14_neue_Messungen.zip -o output/Analyse.xlsx
+
 # Einstellungen (Firma, Farben, Limit, Polynomgrad …) im Blatt "Einstellungen" ändern,
 # dann mit diesen Einstellungen neu erzeugen:
 python -m noise_analysis data/TestDevices_PNGs.zip -o output/Analyse_v2.xlsx --settings output/Analyse_Geraeuschemission.xlsx
@@ -42,6 +45,10 @@ Messdaten (`*.png`, `*.zip`) und Reports (`*.xlsx`) werden per `.gitignore` nich
 `NN_<Gerät>__…__Ruhegeräusch.png` = 1. Messung (0 min) von Gerät NN,
 `…_1min_later.png`, `…_2min_later.png`, `…_5min_later.png` = Folgemessungen.
 
+Optional ARTA-CSV-Exporte (`#14_1_direkt-Messung.csv` = 0 min, `#14_2_1_min_later-Messung.csv` = 1 min)
+im selben ZIP/Ordner: Diese Messungen werden dann mit den exakten Bin-Werten ausgewertet
+(Datenquelle „CSV (exakt)“), das PNG dient nur noch zur Darstellung und Validierung.
+
 ## Aufbau
 
 | Modul | Inhalt |
@@ -54,10 +61,12 @@ Messdaten (`*.png`, `*.zip`) und Reports (`*.xlsx`) werden per `.gitignore` nich
 
 ## Wichtige Hinweise zur Methodik
 
-* Die ARTA-Bilder sind **FFT-Schmalbandspektren** (65536 Pkt, 48 kHz, Hann, Δf = 0,732 Hz).
-* Pegelauflösung der Bilder: 0,049 dB/px; validiert gegen ARTA-Cursor-Anzeigen (OCR).
-* Die Umrechnung Bild → Leistung ist **empirisch gegen ARTA-RMS(A)** kalibriert (`cal_noise_db`,
-  `cal_tone_db` im Blatt Einstellungen), Rest-Abweichung ≈ 0,2 dB RMS.
+* Die ARTA-Bilder sind **FFT-Schmalbandspektren** (16384 Pkt, 48 kHz, Hann, Δf = 2,93 Hz).
+* Pegelauflösung der Bilder: 0,049 dB/px; validiert gegen ARTA-Cursor-Anzeigen (OCR) und gegen
+  ARTA-CSV-Exporte derselben Messung (L_A −0,04 dB, Lautheit −0,4 %).
+* Rauschleistung = Bin-Pegel ÷ ENBW (1,5 Bins). Linien sind durch Frequenzdrift während der Mittelung
+  über 5–7 Bins verschmiert; bei PNG-Daten wird die Linienleistung daher um `cal_tone_db` = +3,6 dB
+  korrigiert (aus CSV gemessen, gegen ARTA-RMS(A) bestätigt: Rest ≈ 0,24 dB RMS).
 * Zwicker-Lautheit: 1-kHz-Ton 40/60/80 dB → 1,02/4,10/16,6 sone (DIN-Referenz 1,00/4,01/16,07), siehe `tests/`.
 * Messung im Nahfeld (5 cm): Absolutwerte nur für Vergleiche verwenden.
 

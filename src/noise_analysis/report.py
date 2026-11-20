@@ -232,7 +232,7 @@ class ReportBuilder:
 
         # ---- key figures
         kh = ["Messung", "Datei", "Datum/Zeit", "L_A\n[dB(A)]", "N\n[sone]", "L_N\n[phon]",
-              "S\n[acum]", "max PR\n[dB]", "max K_T\n[dB]", "Linien\n(>3 dB)", "Bänder\n≥ Limit"]
+              "S\n[acum]", "max PR\n[dB]", "max K_T\n[dB]", "Linien\n(>3 dB)", "Bänder\n≥ Limit", "Datenquelle"]
         _hdr(ws, 4, 1, kh); ws.row_dimensions[4].height = 26
         T0 = 6 + nm + 2 + 2 * _rows_for(s["chart_height_cm"]) + 40  # placeholder, fixed below
         # data table position: after graphics pages
@@ -262,6 +262,7 @@ class ReportBuilder:
                 v = mt.get(key)
                 v = None if v is None or (isinstance(v, float) and np.isnan(v)) else float(v)
                 _cell(ws, r, 4 + j, v, fmt)
+            _cell(ws, r, 12, m.source, font=Font(name=FONT, size=8, bold=m.csv is not None))
             col = CL(meas_cols[k])
             _cell(ws, r, 11, f"=SUMPRODUCT(--({col}{R0}:{col}{R1}>=$B${R0}:$B${R1}))", "0")
         ws.cell(5, 4).comment = Comment(
@@ -407,6 +408,10 @@ class ReportBuilder:
             _cell(ws, r, 15, f"=SUM({t}!K5:K{4 + nm})", "0")
             _cell(ws, r, 16, f'=IF(O{r}>0,"Limit erreicht","OK")', font=F_B)
             notes = []
+            if getattr(d, "replaced", False):
+                notes.append("Neumessung " + max(m.mtime for m in d.measurements).strftime("%d.%m.%Y"))
+            if any(m.csv is not None for m in d.measurements):
+                notes.append("ausgewertet aus ARTA-CSV (exakt)")
             if any(m.duplicate_of for m in d.measurements):
                 notes.append("2. Messung: Plot identisch mit 1. (Doppelexport?)")
             extra = [m.label for m in d.measurements[2:]]
@@ -507,9 +512,11 @@ class ReportBuilder:
         s = self.s
         ws["A1"] = "Methodik, Validierung und Grenzen"; ws["A1"].font = F_H
         lines = [
-            ("Datenbasis", "ARTA-PNG-Exporte (Spectrum magnitude, FFT 65536 Pkt, 48 kHz, Hann, 50 lineare Mittelungen, "
-             "Kalibrierung 94 dB/1 kHz, Abstand 5 cm). Es handelt sich um FFT-Schmalbandspektren (Δf = 0,732 Hz), "
-             "nicht um 1/12-Oktav-Spektren."),
+            ("Datenbasis", f"ARTA-PNG-Exporte (Spectrum magnitude, FFT {int(s['fft_len'])} Pkt, {s['fs']/1000:g} kHz, "
+             f"{s['window']}, {int(s['averages'])} lineare Mittelungen, Kalibrierung 94 dB/1 kHz, Abstand "
+             f"{s['distance_cm']} cm). FFT-Schmalbandspektren (Δf = {s['fs']/s['fft_len']:.3f} Hz), keine "
+             "1/12-Oktav-Spektren. Liegt zu einer Messung ein ARTA-CSV-Export vor, werden dessen exakte Bin-Werte "
+             "verwendet (Spalte 'Datenquelle' im Geräteblatt)."),
             ("Digitalisierung", "Plotrahmen automatisch; rote Kurve (RGB 255,0,0) je Pixelspalte: oberstes Pixel (Linien), "
              "Median (Rauschband-Mitte). Auflösung 0,049 dB/px, 0,0044 Okt/px. Der gelbe ARTA-Cursor verdeckt eine "
              "Pixelspalte: dort aus Nachbarspalten ergänzt und mit dem per OCR gelesenen Cursor-Wert gestützt."),
@@ -529,7 +536,8 @@ class ReportBuilder:
              "(Zwicker, stationär, freies Feld), Lautstärkepegel, Schärfe DIN 45692, Prominence Ratio und TNR "
              "(ECMA-418-1), Tonzuschlag DIN 45681 (a_v = −2 − lg(1+(f/502)^2,5); K_T-Klassen 0/1/2/3/4/5/6 dB für "
              "ΔL ≤0/≤2/≤4/≤6/≤9/≤12/>12 dB), Hörschwelle (Terhardt-Näherung)."),
-            ("Kalibrierung gegen ARTA", validation.get("cal", "")),
+            ("Pegel aus PNG-Daten", validation.get("cal", "")),
+            ("Validierung mit CSV", validation.get("csv", "keine CSV-Daten vorhanden")),
             ("Validierung Lautheit", validation.get("loud", "")),
             ("Grenzen", "Nahfeldmessung 5 cm: Absolutwerte nicht auf Hörabstand übertragbar, Vergleiche gültig. "
              "Zwicker-Lautheit endet bei 12,5-kHz-Terz (Linien > 14 kHz gehen nicht ein; für Erwachsene meist ohnehin "
@@ -537,7 +545,7 @@ class ReportBuilder:
              "Linienpegel: Hann-Scalloping bis −1,4 dB möglich. K_T-Klassierung aus Sekundärliteratur, bitte gegen "
              "DIN 45681:2005 prüfen."),
             ("Software", "Python-Paket noise_analysis (Repository geraeuschemission-analyse). Neu erzeugen: "
-             "python -m noise_analysis <ZIP|Ordner> -o report.xlsx [--settings report.xlsx]"),
+             "python -m noise_analysis <ZIP|Ordner> [<Nachmessung.zip> …] -o report.xlsx [--settings report.xlsx]"),
         ]
         _hdr(ws, 3, 1, ["Thema", "Beschreibung"])
         for k, (a, b) in enumerate(lines):
